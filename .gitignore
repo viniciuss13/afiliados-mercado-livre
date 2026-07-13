@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.example
+
+venv/
+__pycache__/
+*.py[cod]
+
+secrets/
+credentials/
+*.client_secret.json
+*google-oauth-token.json
+*.log
