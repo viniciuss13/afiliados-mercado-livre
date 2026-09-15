@@ -1,90 +1,116 @@
-# Estrutura do Projeto
+# Arquitetura
 
-Este projeto separa integrações externas, regras de negócio e entrada HTTP para manter o código simples de evoluir.
+## Visão geral
+
+O projeto separa bordas externas, regras de negócio e entradas operacionais.
+
+```text
+Google Forms/Apps Script ----> FastAPI webhooks ----> services ----> Evolution API
+                                      |                 |
+Evolution API events ----------------+                 +----> Google Sheets
+
+CLI scripts -------------------------> services
+
+Docker Compose: Evolution API <----> PostgreSQL
+                       |
+                       +------------> Redis
+```
+
+O pacote Python **não acessa PostgreSQL nem Redis diretamente**. Eles pertencem
+à Evolution API. O estado de mantenedores usado pelo Python está no Sheets.
+
+## Camadas
 
 ```text
 automation_whats/
-  main.py
   clients/
-    evolution/
-      client.py       # Chamadas HTTP para a Evolution API
-      settings.py     # Configurações da Evolution API
-      schemas.py      # Modelos Pydantic dos payloads
-      exceptions.py   # Exceções específicas do client
-    google_sheets/
-      client.py       # Leitura e escrita no Google Sheets
-      settings.py     # Configurações da planilha
-      schemas.py      # Modelos das linhas da planilha
-  services/
-    admin_recipients.py              # Lista de destinatários administrativos
-    mantenedor_media.py              # Carregamento da imagem do We Care
-    mantenedor_payment_reminder.py   # Lembrete mensal e chave Pix
-    mantenedor_reactivation.py       # Retomada de antigos mantenedores
-    mantenedor_welcome.py            # Boas-vindas para novos mantenedores
-    sheet_former_mantenedor_import.py # Processamento de antigos mantenedores
-    sheet_mantenedor_import.py       # Processamento da planilha ativa
-  webhooks/
-    app.py           # Aplicação FastAPI
-    server.py        # Runner Uvicorn
-    handlers.py      # Processamento dos eventos recebidos
-    schemas.py       # Modelos Pydantic dos eventos
+    evolution/       HTTP, schemas, settings e erros da Evolution API
+    google_sheets/   autenticação, leitura e escrita no Google Sheets
+  services/          regras de negócio e composição dos clients
+  webhooks/          FastAPI, schemas HTTP e handlers
+  img/               mídia padrão
+  main.py            entrada do lote mensal
 
-scripts/
-  configure_webhook.py                 # Configura webhook na Evolution API
-  process_antigos_mantenedores_sheet.py # Envia retomada aos antigos mantenedores
-  process_mantenedores_sheet.py         # Envia lembretes mensais
-  send_media.py                         # Teste manual de mídia
-  send_text.py                          # Teste manual de texto
+scripts/             operações manuais e smoke tests reais
+tests/               testes unitários com mocks
 ```
 
-## Regras dos Clients
+### Clients
 
-- Clients sabem apenas conversar com APIs externas.
-- Regras de negócio ficam em `services`.
-- Configurações são carregadas e validadas com Pydantic.
-- Payloads são representados por schemas Pydantic quando fazem parte da borda externa.
-- Erros HTTP da Evolution API são convertidos em exceções específicas.
-- Testes injetam dependências falsas em vez de chamar serviços reais.
+- Traduzem chamadas e respostas dos provedores externos.
+- Carregam configuração validada por Pydantic.
+- Não decidem regras de mantenedores.
+- O client Google usa OAuth local ou service account.
 
-## Fluxos
+### Services
 
-### Boas-vindas
+- Normalizam telefone brasileiro.
+- Montam mensagens e mídia.
+- Coordenam envio, leitura e escrita.
+- Lotes continuam após erro em uma linha e retornam `sent` ou `error`.
 
-Recebe um cadastro novo em:
+### Webhooks
 
-```text
-POST /webhooks/google-form/mantenedor
-```
+- `GET /health`: verifica o processo FastAPI.
+- `POST /webhooks/google-form/mantenedor`: valida e envia boas-vindas.
+- `POST /webhooks/evolution`: recebe eventos e processa retomada.
+- Com `WEBHOOK_SECRET`, todas as rotas POST exigem o header configurado.
 
-Envia mensagem, imagem e notificação administrativa.
+## Fluxos de negócio
 
-### Lembrete Mensal
+### Novo mantenedor
 
-Lê a aba **mantenedores** e envia lembrete de pagamento:
+1. Apps Script envia `nome`, `telefone` e `valor`.
+2. O schema rejeita payload incompleto com HTTP 422.
+3. O telefone é normalizado.
+4. O serviço envia imagem/legenda ou texto como fallback.
+5. Administradores recebem aviso.
 
-```powershell
-.\venv\Scripts\python.exe -m scripts.process_mantenedores_sheet
-```
+Esse fluxo não escreve na planilha: pressupõe que o Forms já gravou a resposta
+na planilha vinculada.
 
-### Retomada de Antigos Mantenedores
+### Lembrete mensal
 
-Lê a aba **antigos_mantenedores** e envia convite de retomada:
+1. Lê `mantenedores` (`nome`, `telefone`, `valor`).
+2. Ignora linhas inválidas.
+3. Envia lembrete/mídia, chave Pix separada e aviso administrativo.
+4. Uma falha individual não interrompe as próximas linhas.
 
-```powershell
-.\venv\Scripts\python.exe -m scripts.process_antigos_mantenedores_sheet
-```
+### Retomada e resposta
 
-Quando a pessoa responde `SIM 50`, o webhook da Evolution API recebe o evento:
+1. Lê `antigos_mantenedores` (`nome`, `telefone`) e envia convite.
+2. Evolution entrega `MESSAGES_UPSERT` ao webhook.
+3. Mensagens `fromMe=true` são ignoradas.
+4. `NÃO`/`NAO` retorna `declined`; texto fora do padrão retorna `ignored`.
+5. `SIM 50` e variações suportadas extraem o valor.
+6. Consulta `mantenedores` para impedir duplicidade.
+7. Resolve o nome pelo WhatsApp ou pela aba antiga.
+8. Sem nome confiável, bloqueia; caso contrário, adiciona a linha ativa.
 
-```text
-POST /webhooks/evolution
-```
+## Integrações e contratos
 
-O handler identifica a resposta e cadastra a pessoa na aba **mantenedores** caso o telefone ainda não exista.
+| Integração | Contrato relevante |
+|---|---|
+| Evolution API | header `apikey`; `sendText`, `sendMedia`, `webhook/find`, `webhook/set` |
+| Google Sheets | abas/cabeçalhos reconhecidos; escrita em `A:C` |
+| Google Forms | JSON com `nome`, `telefone`, `valor` |
+| PostgreSQL/Redis | usados internamente pela Evolution API |
 
-## Endpoints da Evolution API Usados
+Detalhes: [GOOGLE_FORMS.md](GOOGLE_FORMS.md) e
+[GOOGLE_SHEETS.md](GOOGLE_SHEETS.md).
 
-- `POST /message/sendText/{instance}`
-- `POST /message/sendMedia/{instance}`
-- `GET /webhook/find/{instance}`
-- `POST /webhook/set/{instance}`
+## Invariantes
+
+- Execute módulos a partir da raiz do repositório.
+- Telefones são usados somente com dígitos e recebem DDI `55` no formato local.
+- A suíte unitária nunca chama serviços reais.
+- Nunca registre `.env`, OAuth, chaves ou JSON de service account.
+- Mudanças em payload externo exigem teste e documentação correspondentes.
+
+## Limites atuais
+
+- Sem fila, retry persistente ou idempotência distribuída.
+- A consulta antes do append não é atômica em eventos concorrentes.
+- Logs resumidos em stdout, sem métricas/tracing.
+- Agendamento dos lotes fora do código.
+- Processo FastAPI fora do Compose.

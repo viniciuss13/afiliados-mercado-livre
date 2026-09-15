@@ -2,6 +2,19 @@
 
 Este projeto usa a planilha **Mantenedores We Care** como base dos fluxos de mantenedores.
 
+## Preparar o projeto no Google Cloud
+
+1. Crie ou selecione um projeto no Google Cloud Console.
+2. Habilite **Google Sheets API** e **Google Drive API**.
+3. Para desenvolvimento, configure a tela de consentimento OAuth, crie um
+   cliente do tipo aplicativo para computador e baixe o JSON em
+   `credentials/google-oauth-client-secret.json`.
+4. Para produção, crie uma service account, gere uma chave JSON e salve-a fora
+   do Git em `credentials/google-service-account.json`.
+5. Compartilhe a planilha com o e-mail da service account como editor.
+
+Use credenciais e planilhas distintas para homologação e produção.
+
 ## Aba de Mantenedores Ativos
 
 A aba **mantenedores** deve conter:

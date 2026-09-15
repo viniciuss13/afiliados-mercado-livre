@@ -1,0 +1,4 @@
+interface:
+  display_name: "Automation Whats Maintenance"
+  short_description: "Operate and evolve this repository safely"
+  default_prompt: "Use $automation-whats-maintenance to analyze this repository, implement the requested change safely, and validate it."
