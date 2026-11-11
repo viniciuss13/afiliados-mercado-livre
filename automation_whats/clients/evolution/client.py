@@ -122,6 +122,22 @@ class EvolutionClient:
         """
         return self._get(path=f"/webhook/find/{self._settings.instance_name}")
 
+    def connection_state(self) -> dict[str, Any] | None:
+        """Consulta se a instancia esta conectada ao WhatsApp."""
+        return self._get(
+            path=f"/instance/connectionState/{self._settings.instance_name}"
+        )
+
+    def fetch_groups(self, include_participants: bool = False) -> dict[str, Any] | None:
+        """Lista os grupos visiveis para a instancia conectada."""
+        value = "true" if include_participants else "false"
+        return self._get(
+            path=(
+                f"/group/fetchAllGroups/{self._settings.instance_name}"
+                f"?getParticipants={value}"
+            )
+        )
+
     def set_webhook(
         self,
         url: str,

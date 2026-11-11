@@ -31,8 +31,8 @@ def main() -> None:
         media="https://images.icon-icons.com/2699/PNG/512/python_logo_icon_168886.png",
         media_type="image",
         mime_type="image/png",
-        caption="Ola, Mantenedora",
-        file_name="logo_wecare.png",
+        caption="Teste controlado da automacao de afiliados",
+        file_name="affiliate-test.png",
     )
 
     print(response)

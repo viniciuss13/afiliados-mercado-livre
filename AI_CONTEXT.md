@@ -1,85 +1,94 @@
-# Contexto para IA
+# Contexto curto para IA
 
-Resumo canônico e curto para evitar redescoberta do repositório.
+Este repositorio automatiza ofertas de afiliados em grupos de WhatsApp usando
+Python, FastAPI, SQLite e Evolution API.
 
-## Leia nesta ordem
+## Antes de alterar
 
-1. Este arquivo.
-2. `README.md` para comandos e onboarding.
-3. Apenas o documento ligado à tarefa:
-   - arquitetura: `ARCHITECTURE.md`;
-   - configuração: `docs/CONFIGURATION.md` e `.env.example`;
-   - Docker: `DOCKER.md`;
-   - testes: `docs/TESTING.md`;
-   - produção: `docs/PRODUCTION.md`;
-   - incidentes: `docs/OPERATIONS.md`;
-   - Google: `GOOGLE_SHEETS.md` ou `GOOGLE_FORMS.md`.
+1. Leia `AGENTS.md` e a skill `automation-whats-maintenance`.
+2. Nao leia `.env`, credenciais, QR codes, perfil de navegador ou banco real.
+3. Use mocks; nao envie mensagens reais em testes.
+4. Atualize documentacao e este arquivo quando o comportamento mudar.
 
-Não leia `.env`, `credentials/`, `venv/`, `.git/` ou `__pycache__/` para mapear
-o projeto. Eles contêm segredos, dependências instaladas ou ruído.
+## Estado
 
-## Estado atual (2026-09-14)
+- webhook: `POST /webhooks/evolution`;
+- healthcheck: `GET /health`;
+- prontidao segura: `GET /ready`;
+- fila Python: SQLite, fora do PostgreSQL/Redis da Evolution;
+- grupos de origem filtrados por uma lista de JIDs exatos;
+- o worker usa a coleta Playwright da POC do Mercado Livre e o perfil dedicado
+  selecionado por `AFFILIATE_PLAYWRIGHT_BROWSER`; a conversao depende da flag
+  `AFFILIATE_MERCADO_LIVRE_PLAYWRIGHT_ENABLED`, desligada por padrao;
+- POC e worker aceitam `AFFILIATE_PLAYWRIGHT_CHROME_PROFILE_DIR` ou
+  `AFFILIATE_PLAYWRIGHT_EDGE_PROFILE_DIR` para reutilizar o perfil do atalho;
+- os perfis dedicados iniciados pela POC e pelo worker usam o sandbox do Chromium;
+- a URL original de cada oferta vai ao navegador; a URL fixa e padrao da CLI
+  da POC. A fila filtra Mercado Livre antes de aplicar o limite de conversoes;
+- em terminal interativo e navegador visivel, o worker usa a mesma pausa para
+  login ou verificacao manual da POC; o erro distingue verificacao repetida,
+  navegacao interrompida e tempo esgotado;
+- origens que nao abrem um anuncio ficam em quarentena; o worker segue no lote.
+  A espera pelo atalho **Ir para produto** em perfis sociais e de ate 3 segundos.
+  A conversao pela POC salva a URL da Barra quando a copia coincide com o campo,
+  sem resolver a URL gerada nem exigir marcadores de rastreamento;
+- `scripts.affiliate_worker --conversion-only` testa conversoes pendentes
+  sem processar a fila de entrada ou publicar e mostra o motivo seguro de falhas;
+- `scripts.affiliate_worker --watch` inicia FastAPI e roda a fila ate Ctrl+C.
+  Ativa captura, conversao e envio no processo, aprova novas conversoes e
+  espera 30 segundos entre rodadas. Falha da Evolution pausa o envio na sessao;
+- `scripts.affiliate_worker --retry-copied-links` recupera ofertas bloqueadas
+  pela validacao antiga do link copiado e executa uma rodada so de conversao;
+- Shopee desativada por padrao;
+- o envio usa `linkPreview=true` para solicitar a previa do link afiliado;
+  a Evolution gera a miniatura a partir dos metadados que consegue obter;
+  em 2026-11-11, um link curto do Mercado Livre retornou HTTP 403 de dentro
+  do container Evolution e o Baileys nao retornou previa. O envio isolado
+  desse link com `linkPreview=true` foi aceito sem titulo nem miniatura;
+- Evolution GO de teste na porta 4000: pareamento falha com `405 Client outdated`.
+  Correcao preparada em `poc/evolution_go_preview/Dockerfile`; compilacao inicial
+  interrompida pela reinicializacao do Docker. O container segue na imagem oficial.
+- revisao obrigatoria e publicacao automatica desativada por padrao;
+- skill de revisao versionada em `skills/affiliate-review/SKILL.md`;
+- instale com `pip install -r requirements.txt`; o arquivo referencia as
+  dependencias diretas em `requirements-affiliate.txt`;
+- ambiente virtual criado com as dependencias diretas;
+- diagnostico sanitizado em `scripts/evolution_status.py`;
+- configuracao local em `scripts/setup_evolution_windows.ps1`;
+- diagnostico de 2026-11-10: WSL 3.0.5 e Docker Compose v5.6.1 disponiveis;
+  apos iniciar o Docker Desktop, cliente e servidor responderam com 29.9.2;
+  aplicativo e disco de dados ainda no C:, com 0,55 GB livres na checagem;
+  nenhum container da Evolution, PostgreSQL ou Redis foi encontrado ativo;
+  `.env` presente, com conteudo e grupos nao verificados;
+- `venv` anterior tinha extensoes incompativeis. Em ambiente limpo com Python
+  3.13.16, `requirements.txt`, `pip check` e os 34 testes passaram.
 
-- Python 3.12; dependências fixadas em `requirements.txt`.
-- 37 testes unitários aprovados e `pip check` sem conflitos na última validação.
-- Compose: Evolution API v2.3.7, PostgreSQL 15 e Redis 7.4.
-- Dev usa `docker-compose.yml` + `docker-compose.dev.yml`.
-- Produção usa `docker-compose.yml` + `docker-compose.prod.yml`.
-- Manager local: `http://localhost:8080/manager`.
-- FastAPI local: `http://localhost:8000`; health: `/health`.
-- O FastAPI não está no Compose; produção documentada com `systemd`.
+## Arquivos centrais
 
-Verifique novamente fatos sujeitos a mudança antes de afirmá-los como atuais.
+- parser: `automation_whats/affiliate/message_parser.py`;
+- persistencia: `automation_whats/affiliate/repository.py`;
+- resolvedor: `automation_whats/affiliate/link_resolver.py`;
+- worker: `automation_whats/affiliate/worker.py`;
+- webhook: `automation_whats/webhooks/handlers.py`;
+- Evolution: `automation_whats/clients/evolution/client.py`.
 
-## Mapa de decisão
+## Riscos e proximos passos
 
-- Evolution API: `automation_whats/clients/evolution/`.
-- Google Sheets/auth: `automation_whats/clients/google_sheets/`.
-- Mensagens/regras: `automation_whats/services/`.
-- HTTP/eventos: `automation_whats/webhooks/`.
-- Operações reais: `scripts/`.
-- Regressões: `tests/`.
+- validar os JIDs reais em homologacao;
+- homologar a conversao automatica e uma publicacao controlada;
+- obter liberacao da Shopee;
+- instalar a skill na pasta reconhecida pelo Codex;
+- executar a suite completa em um venv com as dependencias diretas.
 
-## Invariantes
+## POC e conversao do Mercado Livre
 
-- O Python não acessa PostgreSQL/Redis; eles pertencem à Evolution API.
-- Forms dispara boas-vindas, mas a linha é gravada pela planilha vinculada.
-- `SIM valor` escreve em `mantenedores`; a consulta prévia não é transação.
-- `fromMe=true` é ignorado para não processar as próprias mensagens.
-- Testes automatizados não enviam WhatsApp nem escrevem no Google.
-- Scripts `send_*`, `process_*` e POST do Forms podem causar efeitos reais.
-- Nunca exponha `.env`, tokens, JSON de credencial ou dados pessoais.
-
-## Fluxo de trabalho esperado
-
-1. Rode `git status --short` e leia os arquivos centrais da área.
-2. Faça uma alteração pequena e preserve mudanças existentes.
-3. Rode teste focado e depois a suíte completa.
-4. Para Docker, valide `docker compose ... config` e o estado real.
-5. Para integrações, separe mock, homologação e produção.
-6. Atualize documentação, estado, riscos e próximos passos no mesmo ciclo.
-
-## Validação segura
-
-```powershell
-.\venv\Scripts\python.exe -m pip check
-.\venv\Scripts\python.exe -m unittest discover -v
-docker compose -f docker-compose.yml -f docker-compose.dev.yml config
-docker compose -f docker-compose.yml -f docker-compose.dev.yml ps
-```
-
-Não rode scripts de envio/lote sem confirmar ambiente, planilha e destinatário.
-
-## Lacunas conhecidas
-
-- sem CI/CD, fila, retry persistente, métricas ou tracing;
-- sem container do FastAPI e sem scheduler embutido;
-- sem idempotência atômica para respostas concorrentes;
-- aceite de produção depende de VPS, DNS, TLS, credenciais e smoke real.
-
-## Skill local
-
-Use `$automation-whats-maintenance`, em
-`.agents/skills/automation-whats-maintenance/SKILL.md`, para manutenção,
-diagnóstico, testes e operação deste repositório.
-
+- Entrada em `poc/mercadolivre_affiliate/run.py` e roteiro em
+  `poc/mercadolivre_affiliate/README.md`.
+- Edge Stable com perfil dedicado. Chrome Stable exige `--cdp` para usar
+  a sessão existente ou `--dedicated-profile` para abrir perfil separado.
+  `--browser all --dedicated-profile` executa ambos em sequência.
+  Extração, confirmação de cópia e atribuição
+  são registradas separadamente. No Edge autenticado, o catálogo
+  `MLB34229008` retornou um link confirmado no clipboard, com divergência entre
+  o item exibido e o filtro solicitado. A sessão real dedicada e a comissão
+  ainda precisam ser verificadas. Traces ficam restritos aos testes simulados.

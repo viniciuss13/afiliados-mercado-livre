@@ -34,6 +34,26 @@ Em produção, use o override `prod` e reinicie o Python com
 `down --volumes` em produção sem backup e solicitação explícita: ele apaga os
 dados persistentes.
 
+## Testar a prévia do link
+
+O envio de texto já solicita `linkPreview=true`. Para diagnosticar a ausência da
+miniatura, cole no WhatsApp o mesmo link de afiliado que o worker publicou e
+espere a prévia no editor antes de enviar. Se a miniatura aparecer na composição
+manual, compare com o envio da automação em um grupo de teste. A Evolution usa
+seu próprio mecanismo de geração e a disponibilidade da prévia pode variar.
+No diagnóstico local de 2026-11-11, um link curto do Mercado Livre retornou
+HTTP 403 de dentro do container, e o Baileys não gerou a prévia. Esse teste
+fez apenas a leitura pública do link, sem publicar no WhatsApp.
+Um envio real autorizado com somente esse link e `linkPreview=true` foi aceito
+pela Evolution, mas a resposta não incluiu título nem miniatura de prévia.
+
+O Evolution GO de teste usa a porta local 4000. O GO 0.7.2 baixou uma versão
+atual do WhatsApp Web, mas recebeu `405 Client outdated` ao tentar conectar com
+a versão compilada. A correção proposta em [evolution-go#228](https://github.com/evolution-foundation/evolution-go/issues/228)
+está preparada em `poc/evolution_go_preview/Dockerfile`. A primeira compilação
+foi interrompida quando o Docker Desktop reiniciou. A imagem corrigida ainda
+precisa ser compilada e validada antes de trocar o container de teste.
+
 ## Backups
 
 Os volumes persistentes são `postgres_data`, `redis_data` e
@@ -53,18 +73,22 @@ aprovação próprios.
 
 ## Agendamento dos lotes
 
-O projeto não contém scheduler. Antes de criar cron/timer:
+Para executar continuamente no terminal, use `scripts.affiliate_worker --watch`
+com a Evolution ativa. Esse modo inicia o receptor, converte e publica até
+Ctrl+C. Veja a configuração do perfil no [README](../README.md#modo-contínuo-no-windows).
 
-1. valide contra planilha e números de homologação;
+Para rodar por cron ou timer:
+
+1. valide com grupos de homologação;
 2. confirme fuso e dia de envio;
 3. impeça execuções simultâneas;
 4. capture stdout/stderr e alerte em falha;
 5. mantenha uma forma simples de desabilitar o agendamento.
 
-Comando para um timer externo:
+Comando para uma rodada segura do worker:
 
 ```bash
-/opt/automation_whats/venv/bin/python -m scripts.process_mantenedores_sheet
+/opt/affiliate-whats/venv/bin/python -m scripts.affiliate_worker
 ```
 
 ## Diagnóstico rápido
@@ -93,10 +117,10 @@ Confira segredo, nome do header e o header enviado pela Evolution/Apps Script.
 Confira APIs habilitadas, scopes, credencial e compartilhamento da planilha.
 Em OAuth com escopo antigo, gere novamente o token.
 
-### `SIM 50` não cadastra
+### Oferta não entra na fila
 
-Confira `MESSAGES_UPSERT`, `fromMe=false`, telefone, permissão de escrita, nomes
-das abas e duplicidade existente.
+Confira `MESSAGES_UPSERT`, `fromMe=false`, os JIDs exatos dos grupos de origem,
+`AFFILIATE_ENABLED` e se o ID da mensagem ja existe.
 
 ## Evidência mínima para incidentes
 

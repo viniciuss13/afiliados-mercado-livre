@@ -96,6 +96,37 @@ class EvolutionClientTest(unittest.TestCase):
             timeout=5,
         )
 
+    def test_fetch_groups_uses_expected_endpoint(self) -> None:
+        self.session.request.return_value = self._json_response([])
+
+        response = self.client.fetch_groups()
+
+        self.assertEqual(response, [])
+        self.session.request.assert_called_once_with(
+            method="GET",
+            url=(
+                "http://localhost:8080/group/fetchAllGroups/weca"
+                "?getParticipants=false"
+            ),
+            headers={"apikey": "test-key", "Content-Type": "application/json"},
+            timeout=5,
+        )
+
+    def test_connection_state_uses_expected_endpoint(self) -> None:
+        self.session.request.return_value = self._json_response(
+            {"instance": {"state": "open"}}
+        )
+
+        response = self.client.connection_state()
+
+        self.assertEqual(response, {"instance": {"state": "open"}})
+        self.session.request.assert_called_once_with(
+            method="GET",
+            url="http://localhost:8080/instance/connectionState/weca",
+            headers={"apikey": "test-key", "Content-Type": "application/json"},
+            timeout=5,
+        )
+
     def test_set_webhook_posts_expected_payload(self) -> None:
         """Deve configurar webhook no endpoint esperado."""
         self.session.request.return_value = self._json_response({"enabled": True})

@@ -1,16 +1,18 @@
-"""Ponto de entrada da aplicação."""
+"""Processa uma rodada da fila de ofertas."""
 
 import json
 
-from automation_whats.services.sheet_mantenedor_import import (
-    SheetMantenedorImportService,
-)
+from automation_whats.affiliate import AffiliateWorker
 
 
 def main() -> None:
-    """Processa a planilha de mantenedores e imprime o resumo do envio."""
-    results = SheetMantenedorImportService().process()
-    print(json.dumps(results, ensure_ascii=False, indent=2))
+    """Resolve ofertas pendentes e publica somente quando habilitado."""
+    worker = AffiliateWorker()
+    result = {
+        "processed": worker.process_pending(),
+        "published": worker.publish_approved(),
+    }
+    print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

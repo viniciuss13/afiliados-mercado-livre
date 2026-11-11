@@ -11,3 +11,15 @@ credentials/
 *.client_secret.json
 *google-oauth-token.json
 *.log
+
+data/
+playwright-profile/
+.playwright-browsers/
+
+# POC isolada do Mercado Livre
+/poc/mercadolivre_affiliate/.venv/
+/poc/mercadolivre_affiliate/.profile/
+/poc/mercadolivre_affiliate/.profile-chrome/
+/poc/mercadolivre_affiliate/.profile-edge/
+/poc/mercadolivre_affiliate/.browser_profiles/
+/poc/mercadolivre_affiliate/.artifacts/

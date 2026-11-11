@@ -38,7 +38,14 @@ def main() -> None:
         headers=headers,
     )
 
-    print(response)
+    print(
+        {
+            "configured": True,
+            "url": webhook_url,
+            "events": events,
+            "evolution_response_received": response is not None,
+        }
+    )
 
 
 if __name__ == "__main__":
